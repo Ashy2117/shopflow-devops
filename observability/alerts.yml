@@ -1,0 +1,17 @@
+groups:
+  - name: shopflow-api
+    rules:
+      - alert: CatalogTargetDown
+        expr: up{job="catalog-api"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Catalog API metrics target is down"
+      - alert: OrdersTargetDown
+        expr: up{job="orders-api"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Orders API metrics target is down"
