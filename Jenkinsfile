@@ -1,36 +1,58 @@
 pipeline {
   agent any
-  options { timestamps(); disableConcurrentBuilds() }
+
+  options {
+    timestamps()
+    disableConcurrentBuilds()
+  }
+
+  environment {
+    CATALOG_IMAGE = 'shopflow/catalog-api:0.1.0'
+    ORDERS_IMAGE = 'shopflow/orders-api:0.1.0'
+  }
+
   stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
+
     stage('Test') {
       steps {
         sh '''
-          python3 -m venv .venv
-          . .venv/bin/activate
+          python3 -m venv .ci-venv
+          . .ci-venv/bin/activate
+          python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
           pip install -r services/catalog/requirements.txt
           pip install -r services/orders/requirements.txt
-          pytest -q
+          python -m pytest -v
         '''
       }
     }
+
     stage('Build images') {
       steps {
-        sh 'docker build -t shopflow/catalog-api:0.1.0 services/catalog'
-        sh 'docker build -t shopflow/orders-api:0.1.0 services/orders'
+        sh 'docker build -t "$CATALOG_IMAGE" services/catalog'
+        sh 'docker build -t "$ORDERS_IMAGE" services/orders'
       }
     }
-    stage('Scan if Trivy installed') {
+
+    stage('Security scan') {
       steps {
         sh '''
-          if command -v trivy >/dev/null 2>&1; then
-            trivy image --severity HIGH,CRITICAL --exit-code 1 shopflow/catalog-api:0.1.0
-            trivy image --severity HIGH,CRITICAL --exit-code 1 shopflow/orders-api:0.1.0
-          else
-            echo "Trivy missing on agent; scan skipped."
-          fi
+          command -v trivy
+          trivy image --severity HIGH,CRITICAL --exit-code 1 "$CATALOG_IMAGE"
+          trivy image --severity HIGH,CRITICAL --exit-code 1 "$ORDERS_IMAGE"
         '''
       }
+    }
+  }
+
+  post {
+    always {
+      echo 'ShopFlow CI pipeline finished. Review stage results above.'
     }
   }
 }
